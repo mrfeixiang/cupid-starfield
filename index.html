@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>💘 星空粒子 · 一箭穿心 | Cupid's Arrow Starfield</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            overflow: hidden;
+            background: #000;
+            font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+        }
+        
+        #canvas-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        #video-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 200px;
+            height: 150px;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 2px solid rgba(255, 100, 150, 0.5);
+            box-shadow: 0 0 20px rgba(255, 100, 150, 0.3);
+            z-index: 100;
+            background: #111;
+        }
+
+        #video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform: scaleX(-1);
+        }
+
+        #ui-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 30px;
+        }
+
+        .header {
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 200;
+            color: #fff;
+            text-shadow: 0 0 30px rgba(255, 100, 150, 0.8);
+            letter-spacing: 8px;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            font-size: 1rem;
+            color: rgba(255, 180, 200, 0.8);
+            letter-spacing: 2px;
+        }
+
+        .gesture-status {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            transition: all 0.5s ease;
+        }
+
+        .gesture-icon {
+            font-size: 4rem;
+            margin-bottom: 15px;
+            filter: drop-shadow(0 0 20px rgba(255, 100, 150, 0.8));
+        }
+
+        .gesture-text {
+            font-size: 1.5rem;
+            color: rgba(255, 255, 255, 0.9);
+            text-shadow: 0 0 15px rgba(255, 100, 150, 0.6);
+            letter-spacing: 3px;
+        }
+
+        .instructions {
+            position: fixed;
+            bottom: 30px;
+            left: 30px;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 0.9rem;
+            line-height: 1.8;
+            pointer-events: auto;
+        }
+
+        .instructions span {
+            color: #ff6b9d;
+        }
+
+        #loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            transition: opacity 0.8s ease;
+        }
+
+        .loading-heart {
+            font-size: 5rem;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 0.8; }
+            50% { transform: scale(1.2); opacity: 1; }
+        }
+
+        .loading-text {
+            margin-top: 20px;
+            color: #ff6b9d;
+            font-size: 1.2rem;
+            letter-spacing: 3px;
+        }
+
+        .camera-permission {
+            pointer-events: auto;
+            margin-top: 30px;
+            padding: 15px 40px;
+            font-size: 1rem;
+            background: linear-gradient(135deg, #ff6b9d, #c44569);
+            border: none;
+            border-radius: 30px;
+            color: white;
+            cursor: pointer;
+            letter-spacing: 2px;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 20px rgba(255, 100, 150, 0.4);
+        }
+
+        .camera-permission:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(255, 100, 150, 0.6);
+        }
+
+        .no-camera-mode {
+            margin-top: 15px;
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 0.85rem;
+            cursor: pointer;
+            pointer-events: auto;
+        }
+
+        .no-camera-mode:hover {
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        /* 鼠标模式按钮 */
+        .mouse-controls {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 15px;
+            z-index: 100;
+            pointer-events: auto;
+        }
+
+        .mouse-btn {
+            padding: 12px 25px;
+            background: rgba(255, 100, 150, 0.15);
+            border: 1px solid rgba(255, 100, 150, 0.4);
+            border-radius: 25px;
+            color: #ff9dbd;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+
+        .mouse-btn:hover {
+            background: rgba(255, 100, 150, 0.3);
+            box-shadow: 0 0 20px rgba(255, 100, 150, 0.4);
+        }
+
+        .mouse-btn.active {
+            background: linear-gradient(135deg, #ff6b9d, #c44569);
+            color: white;
+        }
+
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+<div id="loading">
+    <div class="loading-heart">💘</div>
+    <div class="loading-text">正在初始化星空...</div>
+    <button class="camera-permission" id="start-btn">开启摄像头 · 手势交互</button>
+    <div class="no-camera-mode" id="mouse-mode-btn">或使用鼠标/触屏模式</div>
+</div>
+
+<div id="canvas-container"></div>
+
+<div id="video-container" class="hidden">
+    <video id="video" playsinline></video>
+</div>
+
+<div id="ui-overlay">
+    <div class="header">
+        <h1>💘 CUPID'S STARFIELD</h1>
+        <div class="subtitle">张开手 · 星空璀璨 | 握紧拳 · 一箭穿心</div>
+    </div>
+</div>
+
+<div class="gesture-status" id="gesture-status">
+    <div class="gesture-icon" id="gesture-icon">✋</div>
+    <div class="gesture-text" id="gesture-text">张开手掌</div>
+</div>
+
+<div class="instructions" id="instructions">
+    <span>✋ 张开手掌</span> → 星空散开<br>
+    <span>✊ 握紧拳头</span> → 汇聚成心
+</div>
+
+<div class="mouse-controls hidden" id="mouse-controls">
+    <button class="mouse-btn active" id="btn-scatter">✋ 散开星空</button>
+    <button class="mouse-btn" id="btn-heart">💘 一箭穿心</button>
+</div>
+
+<script>
+// ============ 配置 ============
+const CONFIG = {
+    particleCount: 15000,
+    starfieldRadius: 800,
+    heartScale: 18,
+    morphSpeed: 0.03,
+    rotationSpeed: 0.001,
+    colors: {
+        star: [0xffffff, 0xffd1dc, 0xffb6c1, 0xff69b4, 0x87ceeb],
+        heart: [0xff1493, 0xff69b4, 0xdc143c, 0xff6b9d, 0xffc0cb]
+    }
+};
+
+// ============ 全局变量 ============
+let scene, camera, renderer, particles;
+let currentPositions, starPositions, heartPositions;
+let particleColors, starColors, heartColors;
+let morphProgress = 0;
+let targetMorph = 0; // 0 = 星空, 1 = 心形
+let isHandOpen = true;
+let useMouseMode = false;
+let hands = null;
+let videoElement = null;
+
+// ============ 初始化 ============
+init();
+animate();
+
+function init() {
+    // Three.js 场景
+    scene = new THREE.Scene();
+    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 3000);
+    camera.position.z = 1000;
+
+    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setClearColor(0x000000, 1);
+    document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+    // 生成目标形状
+    starPositions = generateStarfield(CONFIG.particleCount);
+    heartPositions = generateCupidHeart(CONFIG.particleCount);
+    
+    // 生成颜色
+    starColors = generateColors(CONFIG.particleCount, CONFIG.colors.star);
+    heartColors = generateColors(CONFIG.particleCount, CONFIG.colors.heart);
+
+    // 创建粒子系统
+    createParticles();
+
+    // 事件监听
+    window.addEventListener('resize', onResize);
+    
+    // 按钮事件
+    document.getElementById('start-btn').addEventListener('click', startCamera);
+    document.getElementById('mouse-mode-btn').addEventListener('click', startMouseMode);
+    document.getElementById('btn-scatter').addEventListener('click', () => setShape(false));
+    document.getElementById('btn-heart').addEventListener('click', () => setShape(true));
+}
+
+// ============ 生成星空坐标 ============
+function generateStarfield(count) {
+    const positions = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) {
+        // 球形分布
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.acos(2 * Math.random() - 1);
+        const r = Math.cbrt(Math.random()) * CONFIG.starfieldRadius;
+        
+        positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+        positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+        positions[i * 3 + 2] = r * Math.cos(phi);
+    }
+    return positions;
+}
+
+// ============ 生成丘比特一箭穿心坐标 ============
+function generateCupidHeart(count) {
+    const positions = new Float32Array(count * 3);
+    const scale = CONFIG.heartScale;
+    
+    // 分配粒子：70% 心形, 20% 箭身, 10% 箭头+箭羽
+    const heartCount = Math.floor(count * 0.7);
+    const arrowCount = Math.floor(count * 0.2);
+    const detailCount = count - heartCount - arrowCount;
+    
+    let idx = 0;
+    
+    // 1. 心形 (参数方程)
+    for (let i = 0; i < heartCount; i++) {
+        const t = (i / heartCount) * Math.PI * 2;
+        // 心形参数方程
+        let x = 16 * Math.pow(Math.sin(t), 3);
+        let y = 13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t);
+        
+        // 添加厚度和随机性，形成立体感
+        const thickness = (Math.random() - 0.5) * 3;
+        const depth = (Math.random() - 0.5) * 4;
+        
+        // 填充心形内部
+        const fill = Math.random();
+        if (fill < 0.4) {
+            x *= Math.random() * 0.8 + 0.2;
+            y *= Math.random() * 0.8 + 0.2;
+        }
+        
+        positions[idx * 3] = x * scale + thickness * scale * 0.3;
+        positions[idx * 3 + 1] = y * scale;
+        positions[idx * 3 + 2] = depth * scale * 0.5;
+        idx++;
+    }
+    
+    // 2. 箭身 (斜穿心脏)
+    const arrowStart = { x: -22, y: -15 };
+    const arrowEnd = { x: 22, y: 15 };
+    
+    for (let i = 0; i < arrowCount; i++) {
+        const t = i / arrowCount;
+        const x = arrowStart.x + (arrowEnd.x - arrowStart.x) * t;
+        const y = arrowStart.y + (arrowEnd.y - arrowStart.y) * t;
+        
+        // 箭身厚度
+        const offsetX = (Math.random() - 0.5) * 1.5;
+        const offsetY = (Math.random() - 0.5) * 1.5;
+        const offsetZ = (Math.random() - 0.5) * 2;
+        
+        positions[idx * 3] = x * scale + offsetX * scale * 0.2;
+        positions[idx * 3 + 1] = y * scale + offsetY * scale * 0.2;
+        positions[idx * 3 + 2] = offsetZ * scale * 0.3;
+        idx++;
+    }
+    
+    // 3. 箭头 (三角形)
+    const arrowheadCount = Math.floor(detailCount * 0.5);
+    for (let i = 0; i < arrowheadCount; i++) {
+        // 箭头尖端在右上方
+        const tipX = 25;
+        const tipY = 18;
+        
+        // 随机分布在三角形箭头区域
+        const r1 = Math.random();
+        const r2 = Math.random();
+        const sqrt_r1 = Math.sqrt(r1);
+        
+        // 三角形顶点
+        const v0 = { x: tipX, y: tipY };
+        const v1 = { x: tipX - 5, y: tipY + 3 };
+        const v2 = { x: tipX - 5, y: tipY - 3 };
+        
+        const x = (1 - sqrt_r1) * v0.x + sqrt_r1 * (1 - r2) * v1.x + sqrt_r1 * r2 * v2.x;
+        const y = (1 - sqrt_r1) * v0.y + sqrt_r1 * (1 - r2) * v1.y + sqrt_r1 * r2 * v2.y;
+        const z = (Math.random() - 0.5) * 2;
+        
+        positions[idx * 3] = x * scale;
+        positions[idx * 3 + 1] = y * scale;
+        positions[idx * 3 + 2] = z * scale * 0.3;
+        idx++;
+    }
+    
+    // 4. 箭羽 (尾部羽毛)
+    const featherCount = detailCount - arrowheadCount;
+    for (let i = 0; i < featherCount; i++) {
+        // 羽毛在左下方
+        const baseX = -24;
+        const baseY = -17;
+        
+        // 两片羽毛
+        const side = i % 2 === 0 ? 1 : -1;
+        const t = Math.random();
+        
+        const x = baseX - t * 4;
+        const y = baseY + side * (1 + t * 3) + (Math.random() - 0.5);
+        const z = (Math.random() - 0.5) * 3;
+        
+        positions[idx * 3] = x * scale;
+        positions[idx * 3 + 1] = y * scale;
+        positions[idx * 3 + 2] = z * scale * 0.3;
+        idx++;
+    }
+    
+    return positions;
+}
+
+// ============ 生成颜色 ============
+function generateColors(count, palette) {
+    const colors = new Float32Array(count * 3);
+    const color = new THREE.Color();
+    
+    for (let i = 0; i < count; i++) {
+        const hex = palette[Math.floor(Math.random() * palette.length)];
+        color.setHex(hex);
+        colors[i * 3] = color.r;
+        colors[i * 3 + 1] = color.g;
+        colors[i * 3 + 2] = color.b;
+    }
+    return colors;
+}
+
+// ============ 创建粒子系统 ============
+function createParticles() {
+    const geometry = new THREE.BufferGeometry();
+    
+    // 初始位置 = 星空
+    currentPositions = new Float32Array(starPositions);
+    particleColors = new Float32Array(starColors);
+    
+    geometry.setAttribute('position', new THREE.BufferAttribute(currentPositions, 3));
+    geometry.setAttribute('color', new THREE.BufferAttribute(particleColors, 3));
+    
+    // 发光纹理
+    const sprite = createGlowSprite();
+    
+    const material = new THREE.PointsMaterial({
+        size: 4,
+        map: sprite,
+        vertexColors: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        transparent: true,
+        opacity: 0.9
+    });
+    
+    particles = new THREE.Points(geometry, material);
+    scene.add(particles);
+}
+
+function createGlowSprite() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 64;
+    canvas.height = 64;
+    const ctx = canvas.getContext('2d');
+    
+    const gradient = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+    gradient.addColorStop(0, 'rgba(255,255,255,1)');
+    gradient.addColorStop(0.1, 'rgba(255,255,255,0.9)');
+    gradient.addColorStop(0.4, 'rgba(255,200,220,0.4)');
+    gradient.addColorStop(1, 'rgba(0,0,0,0)');
+    
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, 64, 64);
+    
+    const texture = new THREE.Texture(canvas);
+    texture.needsUpdate = true;
+    return texture;
+}
+
+// ============ 动画循环 ============
+function animate() {
+    requestAnimationFrame(animate);
+    
+    // 缓慢旋转
+    if (particles) {
+        particles.rotation.y += CONFIG.rotationSpeed;
+        
+        // 形态变换
+        updateMorph();
+    }
+    
+    renderer.render(scene, camera);
+}
+
+function updateMorph() {
+    // 平滑过渡到目标状态
+    const delta = targetMorph - morphProgress;
+    morphProgress += delta * CONFIG.morphSpeed;
+    
+    const positions = particles.geometry.attributes.position.array;
+    const colors = particles.geometry.attributes.color.array;
+    
+    for (let i = 0; i < CONFIG.particleCount; i++) {
+        const i3 = i * 3;
+        
+        // 位置插值
+        positions[i3] = starPositions[i3] + (heartPositions[i3] - starPositions[i3]) * morphProgress;
+        positions[i3 + 1] = starPositions[i3 + 1] + (heartPositions[i3 + 1] - starPositions[i3 + 1]) * morphProgress;
+        positions[i3 + 2] = starPositions[i3 + 2] + (heartPositions[i3 + 2] - starPositions[i3 + 2]) * morphProgress;
+        
+        // 颜色插值
+        colors[i3] = starColors[i3] + (heartColors[i3] - starColors[i3]) * morphProgress;
+        colors[i3 + 1] = starColors[i3 + 1] + (heartColors[i3 + 1] - starColors[i3 + 1]) * morphProgress;
+        colors[i3 + 2] = starColors[i3 + 2] + (heartColors[i3 + 2] - starColors[i3 + 2]) * morphProgress;
+    }
+    
+    particles.geometry.attributes.position.needsUpdate = true;
+    particles.geometry.attributes.color.needsUpdate = true;
+}
+
+// ============ 手势检测 ============
+async function startCamera() {
+    try {
+        videoElement = document.getElementById('video');
+        
+        // 初始化 MediaPipe Hands
+        hands = new Hands({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+        });
+        
+        hands.setOptions({
+            maxNumHands: 1,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.7,
+            minTrackingConfidence: 0.5
+        });
+        
+        hands.onResults(onHandResults);
+        
+        // 启动摄像头
+        const camera = new Camera(videoElement, {
+            onFrame: async () => {
+                await hands.send({ image: videoElement });
+            },
+            width: 640,
+            height: 480
+        });
+        
+        await camera.start();
+        
+        // 显示视频
+        document.getElementById('video-container').classList.remove('hidden');
+        document.getElementById('loading').style.opacity = '0';
+        setTimeout(() => {
+            document.getElementById('loading').classList.add('hidden');
+        }, 800);
+        
+    } catch (error) {
+        console.error('摄像头启动失败:', error);
+        alert('无法访问摄像头，将切换到鼠标模式');
+        startMouseMode();
+    }
+}
+
+function onHandResults(results) {
+    if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+        const landmarks = results.multiHandLandmarks[0];
+        
+        // 检测手势：张开 vs 握拳
+        const isOpen = detectOpenHand(landmarks);
+        
+        if (isOpen !== isHandOpen) {
+            isHandOpen = isOpen;
+            setShape(!isOpen);
+        }
+    }
+}
+
+function detectOpenHand(landmarks) {
+    // 简单的张开/握拳检测
+    // 比较指尖与掌心的距离
+    
+    const palmCenter = landmarks[0]; // 手腕
+    const fingerTips = [
+        landmarks[4],  // 拇指
+        landmarks[8],  // 食指
+        landmarks[12], // 中指
+        landmarks[16], // 无名指
+        landmarks[20]  // 小指
+    ];
+    
+    // 计算每个指尖到手腕的距离
+    let totalDist = 0;
+    for (const tip of fingerTips) {
+        const dx = tip.x - palmCenter.x;
+        const dy = tip.y - palmCenter.y;
+        totalDist += Math.sqrt(dx * dx + dy * dy);
+    }
+    
+    const avgDist = totalDist / 5;
+    
+    // 阈值判断：距离大说明手张开
+    return avgDist > 0.25;
+}
+
+// ============ 鼠标模式 ============
+function startMouseMode() {
+    useMouseMode = true;
+    document.getElementById('loading').style.opacity = '0';
+    setTimeout(() => {
+        document.getElementById('loading').classList.add('hidden');
+    }, 800);
+    
+    document.getElementById('mouse-controls').classList.remove('hidden');
+    document.getElementById('instructions').classList.add('hidden');
+}
+
+function setShape(isHeart) {
+    targetMorph = isHeart ? 1 : 0;
+    
+    // 更新UI
+    const icon = document.getElementById('gesture-icon');
+    const text = document.getElementById('gesture-text');
+    
+    if (isHeart) {
+        icon.textContent = '💘';
+        text.textContent = '一箭穿心';
+        document.getElementById('btn-scatter')?.classList.remove('active');
+        document.getElementById('btn-heart')?.classList.add('active');
+    } else {
+        icon.textContent = '✋';
+        text.textContent = '星空璀璨';
+        document.getElementById('btn-scatter')?.classList.add('active');
+        document.getElementById('btn-heart')?.classList.remove('active');
+    }
+}
+
+// ============ 窗口调整 ============
+function onResize() {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+}
+</script>
+
+</body>
+</html>
